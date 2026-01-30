@@ -3,41 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>測試成功！</title>
+    <title>行程表</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f0fdf4; /* 淡綠色背景 */
-            color: #166534;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
+        :root { 
+            --primary: #FF7E5F; 
+            --secondary: #FEB47B; 
+            --bg: #F4F5F7; 
+            --card: #FFFFFF; 
+            --text: #333; 
+            --money-color: #2ecc71;
+            --flow-color: #777;
         }
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            max-width: 80%;
-        }
-        h1 { margin-bottom: 10px; }
-        p { font-size: 1.2rem; }
-        .success-icon { font-size: 4rem; margin-bottom: 20px; display: block; }
+        
+        body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); margin: 0; color: var(--text); padding-bottom: 80px; }
+        
+        header { background: linear-gradient(135deg, var(--primary), var(--secondary)); padding: 40px 20px 60px; color: white; border-radius: 0 0 30px 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; transition: 0.5s; }
+        h1 { margin: 0; font-size: 26px; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .subtitle { font-size: 14px; opacity: 0.9; margin-top: 8px; }
+
+        .container { max-width: 600px; margin: -40px auto 0; padding: 0 20px; position: relative; z-index: 10; }
+        
+        .info-box { background: var(--card); padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); margin-bottom: 25px; font-size: 14px; line-height: 1.6; color: #555; white-space: pre-wrap; } 
+        .info-box b { color: var(--primary); }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        .tab-btn { background: #fff; color: #888; border: 1px solid #eee; padding: 8px 18px; border-radius: 50px; font-weight: bold; font-size: 14px; white-space: nowrap; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-1px); }
+        .tab-btn.money-tab.active { background: var(--money-color); border-color: var(--money-color); }
+
+        .day-content { display: none; animation: fadeIn 0.4s ease-out; }
+        .day-content.active { display: block; }
+
+        /* --- 行程卡片 --- */
+        .timeline-item { background: var(--card); border-radius: 18px; padding: 18px; margin-bottom: 0px; display: flex; align-items: flex-start; gap: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border-left: 5px solid var(--primary); position: relative; }
+        .time-box { text-align: center; min-width: 50px; }
+        .time { font-weight: 800; color: var(--primary); font-size: 17px; display: block; line-height: 1; }
+        .details { flex: 1; }
+        .place { font-size: 18px; font-weight: bold; margin-bottom: 6px; color: #222; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .tags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+        .tag { background: #FFF0EB; color: var(--primary); font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: bold; }
+        .note { font-size: 13px; color: #666; line-height: 1.5; white-space: pre-wrap; margin-top: 4px; }
+        
+        .btns-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-link { display: inline-flex; align-items: center; font-size: 12px; color: #fff; padding: 5px 12px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; }
+        .btn-link:active { transform: scale(0.95); }
+        .btn-map { background: #4a90e2; }
+        .btn-custom { background: #FF9F43; }
+
+        .travel-divider { text-align: center; padding: 8px 0; color: #aaa; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 5px; position: relative; }
+        .travel-divider::before, .travel-divider::after { content: ''; height: 20px; width: 1px; border-left: 2px dashed #bbb; position: absolute; left: 50%; z-index: -1; }
+        .travel-divider::before { top: -10px; }
+        .travel-divider::after { bottom: -10px; }
+        .travel-badge { background: #e0e0e0; padding: 4px 12px; border-radius: 20px; z-index: 1; font-weight: bold; color: #666; border: 1px solid #fff; }
+
+        /* --- Flow (過場) 樣式 --- */
+        .timeline-item.flow { background: rgba(220, 220, 220, 0.4); box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); border-left: 4px solid #bbb; padding: 12px 15px; margin-bottom: 0; align-items: flex-start; backdrop-filter: blur(2px); }
+        .timeline-item.flow .time { color: var(--flow-color); font-size: 14px; font-weight: bold; }
+        .timeline-item.flow .place { font-size: 15px; color: #555; margin: 0; font-weight: normal; }
+        .timeline-item.flow .note { font-size: 12px; color: #777; margin: 0; margin-top: 2px; }
+        /* 讓 Flow 裡面的按鈕稍微縮小一點，保持低調 */
+        .timeline-item.flow .btn-link { font-size: 11px; padding: 3px 8px; transform: scale(0.95); transform-origin: left center; margin-top: 5px; opacity: 0.9; }
+
+        .day-content > div { margin-bottom: 15px; }
+
+        /* --- 記帳頁樣式 --- */
+        .total-banner { background: var(--money-color); color: white; padding: 20px; border-radius: 16px; text-align: center; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3); }
+        .total-label { font-size: 14px; opacity: 0.9; margin-bottom: 5px; }
+        .total-amount { font-size: 32px; font-weight: 800; }
+        
+        .expense-item { background: #fff; padding: 15px; border-radius: 12px; display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-left: 4px solid var(--money-color); }
+        .expense-info { display: flex; flex-direction: column; flex: 1; padding-right: 10px; }
+        .expense-name { font-weight: bold; font-size: 16px; color: #333; }
+        .expense-payer { font-size: 12px; color: #888; margin-top: 4px; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; display: inline-block; align-self: flex-start; }
+        .expense-note { font-size: 13px; color: #666; margin-top: 4px; line-height: 1.4; white-space: pre-wrap; }
+        .expense-cost { font-weight: 800; color: var(--money-color); font-size: 18px; white-space: nowrap; }
+
+        #loading { text-align: center; color: #aaa; margin-top: 60px; font-size: 14px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <span class="success-icon">🎉</span>
-        <h1>網頁發布成功！</h1>
-        <p>如果你看到這個畫面，<br>代表你的 GitHub 網址已經生效了。</p>
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
-        <p style="color: #666; font-size: 0.9rem;">現在把這個網址傳給同學測試吧！</p>
+    <header>
+        <h1 id="main-title">載入中...</h1>
+        <div class="subtitle" id="sub-title"></div>
+    </header>
+
+    <div class="container">
+        <div class="info-box" id="info-content">讀取資料中...</div>
+        <div class="tabs" id="tabs-container"></div>
+        <div id="loading">正在讀取 Google 試算表...</div>
+        <div id="itinerary-container"></div>
     </div>
 
+    <script>
+        // 👇👇👇 你的 ID 維持不變 👇👇👇
+        const SHEET_ID = "18nBOd2_LDFFePffHMBpk1CCTOXn62_-zQIqdMRPvMX0"; 
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+
+        Papa.parse(SHEET_URL, {
+            download: true, header: true,
+            complete: function(results) {
+                const data = results.data;
+                if (data.length === 0) return;
+                renderApp(data);
+                document.getElementById('loading').style.display = 'none';
+            },
+            error: function(err) {
+                document.getElementById('loading').innerHTML = "讀取失敗，請檢查網路";
+            }
+        });
+
+        function renderApp(data) {
+            let days = {};
+            let moneyList = [];
+            
+            data.forEach(item => {
+                if(!item.Day) return;
+                let dayVal = item.Day.trim();
+
+                if (dayVal.toLowerCase() === 'info') {
+                    if(item.Place) document.getElementById('main-title').innerText = item.Place;
+                    if(item.Tag) document.getElementById('sub-title').innerText = item.Tag;
+                    if(item.Note) document.getElementById('info-content').innerHTML = item.Note;
+                    if (item.Time && item.Time.startsWith('#')) {
+                        document.documentElement.style.setProperty('--primary', item.Time);
+                        document.documentElement.style.setProperty('--secondary', item.Time);
+                    }
+                    return; 
+                }
+
+                if (dayVal.toLowerCase() === 'money') {
+                    moneyList.push(item);
+                    return;
+                }
+
+                if(!item.Place) return;
+                if(!days[dayVal]) days[dayVal] = [];
+                days[dayVal].push(item);
+            });
+
+            const tabsContainer = document.getElementById('tabs-container');
+            const contentContainer = document.getElementById('itinerary-container');
+            let sortedDays = Object.keys(days).sort();
+
+            if (sortedDays.length > 0) {
+                sortedDays.forEach((day, index) => {
+                    let btn = document.createElement('button');
+                    btn.className = `tab-btn ${index === 0 ? 'active' : ''}`;
+                    btn.innerText = `Day ${day}`;
+                    btn.onclick = () => switchTab(day, btn);
+                    tabsContainer.appendChild(btn);
+
+                    let dayDiv = document.createElement('div');
+                    dayDiv.id = `day-${day}`;
+                    dayDiv.className = `day-content ${index === 0 ? 'active' : ''}`;
+                    renderDayContent(dayDiv, days[day]);
+                    contentContainer.appendChild(dayDiv);
+                });
+            }
+
+            if (moneyList.length > 0) {
+                let moneyBtn = document.createElement('button');
+                moneyBtn.className = `tab-btn money-tab`;
+                moneyBtn.innerText = `💰 記帳`;
+                moneyBtn.onclick = () => switchTab('money', moneyBtn);
+                tabsContainer.appendChild(moneyBtn);
+
+                let moneyDiv = document.createElement('div');
+                moneyDiv.id = `day-money`;
+                moneyDiv.className = `day-content`;
+                renderMoneyContent(moneyDiv, moneyList);
+                contentContainer.appendChild(moneyDiv);
+            }
+        }
+
+        function renderDayContent(container, dayItems) {
+             dayItems.forEach(item => {
+                let isFlow = item.Type && item.Type.trim().toLowerCase() === 'flow';
+                
+                if (item.Travel) {
+                    let travelDiv = document.createElement('div');
+                    travelDiv.className = 'travel-divider';
+                    travelDiv.innerHTML = `<span class="travel-badge">↓ ${item.Travel}</span>`;
+                    container.appendChild(travelDiv);
+                }
+
+                let tagsHtml = '';
+                if (item.Tag && !isFlow) { 
+                    let tags = item.Tag.split(/[,， ]+/); 
+                    tagsHtml = `<div class="tags-row">${tags.map(t => t ? `<span class="tag">${t}</span>` : '').join('')}</div>`;
+                }
+                
+                let noteHtml = item.Note ? `<div class="note">${item.Note}</div>` : '';
+                
+                // 👇👇👇 這裡把 !isFlow 的限制拿掉了！現在大家都可能有按鈕 👇👇👇
+                let btnsHtml = '';
+                let mapBtn = item.Map ? `<a href="${item.Map}" target="_blank" class="btn-link btn-map">📍 導航</a>` : '';
+                let linkBtn = item.Link ? `<a href="${item.Link}" target="_blank" class="btn-link btn-custom">🔗 ${item.LinkText || '連結'}</a>` : '';
+                
+                if (mapBtn || linkBtn) {
+                    btnsHtml = `<div class="btns-row">${mapBtn}${linkBtn}</div>`;
+                }
+
+                let card = document.createElement('div');
+                card.className = `timeline-item ${isFlow ? 'flow' : ''}`;
+                
+                card.innerHTML = `
+                    <div class="time-box">
+                        <span class="time">${item.Time}</span>
+                    </div>
+                    <div class="details">
+                        ${tagsHtml}
+                        <div class="place">${item.Place}</div>
+                        ${noteHtml}
+                        ${btnsHtml}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderMoneyContent(container, moneyItems) {
+            let total = 0;
+            let listHtml = '';
+
+            moneyItems.forEach(item => {
+                let cost = parseInt(item.Time) || 0; 
+                total += cost;
+                let payer = item.Tag ? `墊付: ${item.Tag}` : '';
+                let noteHtml = item.Note ? `<div class="expense-note">${item.Note}</div>` : '';
+
+                listHtml += `
+                    <div class="expense-item">
+                        <div class="expense-info">
+                            <span class="expense-name">${item.Place}</span>
+                            ${payer ? `<span class="expense-payer">${payer}</span>` : ''}
+                            ${noteHtml}
+                        </div>
+                        <div class="expense-cost">$${cost}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = `
+                <div class="total-banner">
+                    <div class="total-label">目前總花費</div>
+                    <div class="total-amount">$${total}</div>
+                </div>
+                ${listHtml}
+                <p style="text-align:center; color:#999; font-size:12px; margin-top:20px;">
+                    💡 在試算表 Day 欄位填入 "Money" 即可新增款項
+                </p>
+            `;
+        }
+
+        function switchTab(day, clickedBtn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            clickedBtn.classList.add('active');
+            document.querySelectorAll('.day-content').forEach(d => d.classList.remove('active'));
+            document.getElementById(`day-${day}`).classList.add('active');
+        }
+    </script>
 </body>
 </html>
